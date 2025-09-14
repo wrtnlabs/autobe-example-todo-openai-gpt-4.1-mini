@@ -1,0 +1,47 @@
+/// Represents todo items owned by users. Each todo has a unique title per
+/// user, supports statuses (pending, in-progress, completed), and stores
+/// optional descriptions. Enables independent CRUD and filtering operations
+/// by users. Maintains audit trail fields for creation, update, and optional
+/// soft deletion. Foreign key to todo_list_user ensures ownership linkage.
+/// Implements unique constraint on user and title for title uniqueness per
+/// user.
+///
+/// @namespace Todos
+/// @author AutoBE - https://github.com/wrtnlabs/autobe
+model todo_list_todos {
+  //----
+  // COLUMNS
+  //----
+  /// Primary Key.
+  id String @id
+  
+  /// Owner user's {@link todo_list_user.id}.
+  todo_list_user_id String
+  
+  /// Title of the todo item; unique per user; max length 100.
+  title String
+  
+  /// Optional detailed description of the todo item; max length 500.
+  description String?
+  
+  /// Status of the todo item; possible values: 'pending', 'in-progress',
+  /// 'completed'.
+  status String
+  
+  /// Timestamp when the todo item was created.
+  created_at DateTime
+  
+  /// Timestamp when the todo item was last updated.
+  updated_at DateTime
+  
+  /// Soft delete timestamp; null means active.
+  deleted_at DateTime?
+  
+  //----
+  // RELATIONS
+  //----
+  user todo_list_user @relation(fields: [todo_list_user_id], references: [id], onDelete: Cascade)
+  
+  @@unique([todo_list_user_id, title])
+  @@index([todo_list_user_id, created_at])
+}

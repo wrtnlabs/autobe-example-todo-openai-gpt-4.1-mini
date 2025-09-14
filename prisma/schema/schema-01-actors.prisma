@@ -1,0 +1,107 @@
+/// Guest entities representing unauthenticated users with minimal
+/// permissions. Guests do not require authentication fields like email or
+/// password. This table supports managing guests as distinct actors with
+/// limited access. It tracks creation, update, and deletion timestamps for
+/// audit purposes.
+///
+/// @namespace Actors
+/// @author AutoBE - https://github.com/wrtnlabs/autobe
+model todo_list_guest {
+  //----
+  // COLUMNS
+  //----
+  /// Primary Key.
+  id String @id
+  
+  /// Timestamp when the guest record was created.
+  created_at DateTime
+  
+  /// Timestamp when the guest record was last updated.
+  updated_at DateTime
+  
+  /// Timestamp when the guest record was deleted (soft delete).
+  deleted_at DateTime?
+  
+  //----
+  // RELATIONS
+  //----
+  @@index([created_at, updated_at])
+}
+
+/// Authenticated user entities with login credentials and permissions to
+/// manage their todos. Includes email and hashed password for
+/// authentication. Enforces unique email. Tracks creation, update, and
+/// deletion timestamps. Supports soft deletes.
+///
+/// @namespace Actors
+/// @author AutoBE - https://github.com/wrtnlabs/autobe
+model todo_list_user {
+  //----
+  // COLUMNS
+  //----
+  /// Primary Key.
+  id String @id
+  
+  /// User email address used for authentication and contact. Must be unique
+  /// across users.
+  email String
+  
+  /// Hashed password for user authentication. Passwords must not be stored in
+  /// plain text.
+  password_hash String
+  
+  /// Timestamp when the user was created.
+  created_at DateTime
+  
+  /// Timestamp when the user was last updated.
+  updated_at DateTime
+  
+  /// Timestamp when the user was deleted (soft delete).
+  deleted_at DateTime?
+  
+  //----
+  // RELATIONS
+  //----
+  todo_list_todos todo_list_todos[]
+  
+  @@unique([email])
+  @@index([created_at, updated_at])
+}
+
+/// Administrator users with elevated permissions and full system access.
+/// Includes email and hashed password for authentication. Enforces unique
+/// email addresses. Tracks creation, update, and deletion timestamps for
+/// audit and soft delete purposes.
+///
+/// @namespace Actors
+/// @author AutoBE - https://github.com/wrtnlabs/autobe
+model todo_list_admin {
+  //----
+  // COLUMNS
+  //----
+  /// Primary Key.
+  id String @id
+  
+  /// Admin email address used for authentication and contact. Must be unique
+  /// across admins.
+  email String
+  
+  /// Hashed password for admin authentication. Passwords must never be stored
+  /// in plain text.
+  password_hash String
+  
+  /// Timestamp when the admin user was created.
+  created_at DateTime
+  
+  /// Timestamp when the admin user was last updated.
+  updated_at DateTime
+  
+  /// Timestamp when the admin user was deleted (soft delete).
+  deleted_at DateTime?
+  
+  //----
+  // RELATIONS
+  //----
+  @@unique([email])
+  @@index([created_at, updated_at])
+}
