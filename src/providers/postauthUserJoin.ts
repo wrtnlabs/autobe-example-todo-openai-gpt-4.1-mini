@@ -1,85 +1,64 @@
-import jwt from "jsonwebtoken";
-import { MyGlobal } from "../MyGlobal";
-import typia, { tags } from "typia";
+import { HttpException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import jwt from "jsonwebtoken";
+import typia, { tags } from "typia";
 import { v4 } from "uuid";
-import { toISOStringSafe } from "../util/toISOStringSafe";
-import { ITodoListUser } from "@ORGANIZATION/PROJECT-api/lib/structures/ITodoListUser";
+import { MyGlobal } from "../MyGlobal";
+import { PasswordUtil } from "../utils/passwordUtil";
+import { toISOStringSafe } from "../utils/toISOStringSafe";
+
+import { ITodoListAppUser } from "@ORGANIZATION/PROJECT-api/lib/structures/ITodoListAppUser";
+import { IAuthorizationToken } from "@ORGANIZATION/PROJECT-api/lib/structures/IAuthorizationToken";
 import { UserPayload } from "../decorators/payload/UserPayload";
 
 /**
- * Registers a new user account in the todo list system.
+ * Registers a new user account for the 'user' role in the todoListApp backend.
  *
- * This endpoint creates a new record in the todo_list_user table with the
- * provided email and plaintext password which is hashed before storage. It
- * ensures the email is unique and issues JWT tokens for authentication upon
- * successful registration.
+ * This endpoint allows public user registration by creating a new user record
+ * with hashed password and unverified email status. Upon successful creation,
+ * it generates JWT access and refresh tokens for immediate authenticated
+ * usage.
  *
- * No authentication is required to call this endpoint.
- *
- * @param props - Object containing the authenticated user payload and request
- *   body.
- * @param props.user - The authenticated user's payload (not used in
- *   registration but present for API contract).
- * @param props.body - The request body containing user creation data (email and
- *   plaintext password).
- * @returns The authorized user object including JWT tokens for access and
- *   refresh.
- * @throws {Error} When the email already exists in the system.
+ * @param props - Object containing the user registration data.
+ * @param props.body - User creation data including email and plain password.
+ * @returns The authorized user data containing user ID and JWT tokens.
+ * @throws {HttpException} When user creation fails (e.g., duplicate email).
  */
-export async function postauthUserJoin(props: {
-  user: UserPayload;
-  body: ITodoListUser.ICreate;
-}): Promise<ITodoListUser.IAuthorized> {
+export async function postAuthUserJoin(props: {
+  body: ITodoListAppUser.ICreate;
+}): Promise<ITodoListAppUser.IAuthorized> {
   const { body } = props;
 
-  // Check if email already exists
-  const existingUser = await MyGlobal.prisma.todo_list_user.findUnique({
-    where: { email: body.email },
-  });
+  // Hash the password
+  const hashedPassword = await PasswordUtil.hash(body.password_hash);
 
-  if (existingUser) {
-    throw new Error(`Email already registered: ${body.email}`);
-  }
-
-  // Hash the plaintext password
-  const hashedPassword = await MyGlobal.password.hash(body.password);
-
-  // Generate new UUID
-  const id = v4() as string & tags.Format<"uuid">;
-
-  // Use toISOStringSafe to get current timestamp string
+  // Prepare timestamps as ISO strings
   const now = toISOStringSafe(new Date());
 
-  // Create new user in the database
-  const created = await MyGlobal.prisma.todo_list_user.create({
+  // Generate new user ID as UUID v4
+  const newUserId = v4() as string & tags.Format<"uuid">;
+
+  // Create new user in database
+  const newUser = await MyGlobal.prisma.todo_list_app_users.create({
     data: {
-      id,
+      id: newUserId,
       email: body.email,
       password_hash: hashedPassword,
+      email_verified: false,
       created_at: now,
       updated_at: now,
-      deleted_at: null,
+    },
+    select: {
+      id: true,
+      email: true,
     },
   });
 
-  // Define JWT expiration timings
-  const accessExpiresInSeconds = 3600; // 1 hour
-  const refreshExpiresInSeconds = 7 * 24 * 3600; // 7 days
-
-  // Compute expiry date strings
-  const accessExpiredAt = toISOStringSafe(
-    new Date(Date.now() + accessExpiresInSeconds * 1000),
-  );
-  const refreshableUntil = toISOStringSafe(
-    new Date(Date.now() + refreshExpiresInSeconds * 1000),
-  );
-
-  // Generate access JWT token
+  // Prepare JWT tokens
   const accessToken = jwt.sign(
     {
-      userId: created.id,
-      email: created.email,
+      userId: newUser.id,
+      email: newUser.email,
     },
     MyGlobal.env.JWT_SECRET_KEY,
     {
@@ -88,10 +67,9 @@ export async function postauthUserJoin(props: {
     },
   );
 
-  // Generate refresh JWT token
   const refreshToken = jwt.sign(
     {
-      userId: created.id,
+      userId: newUser.id,
       tokenType: "refresh",
     },
     MyGlobal.env.JWT_SECRET_KEY,
@@ -101,18 +79,19 @@ export async function postauthUserJoin(props: {
     },
   );
 
-  // Return the authorized user including tokens
+  // Calculate expiration ISO strings
+  const expiredAt = toISOStringSafe(new Date(Date.now() + 3600 * 1000)); // 1 hour later
+  const refreshableUntil = toISOStringSafe(
+    new Date(Date.now() + 7 * 24 * 3600 * 1000),
+  ); // 7 days later
+
+  // Return authorized user data
   return {
-    id: created.id,
-    email: created.email,
-    password_hash: created.password_hash,
-    created_at: now,
-    updated_at: now,
-    deleted_at: null,
+    id: newUser.id,
     token: {
       access: accessToken,
       refresh: refreshToken,
-      expired_at: accessExpiredAt,
+      expired_at: expiredAt,
       refreshable_until: refreshableUntil,
     },
   };

@@ -1,0 +1,39 @@
+/// Represents individual todo items created and managed by users in the todo
+/// list application. Each item is tied exclusively to one user, with a
+/// status indicating completion state and timestamps for creation and last
+/// update. This model enables users to independently create, view, update,
+/// and delete their tasks while enforcing ownership and access control. It
+/// references the users table for ownership association.
+///
+/// @namespace Todo
+/// @author AutoBE - https://github.com/wrtnlabs/autobe
+model todo_list_app_todo_items {
+  //----
+  // COLUMNS
+  //----
+  /// Primary Key.
+  id String @id
+  
+  /// Owning user's {@link todo_list_app_users.id}.
+  todo_list_app_user_id String
+  
+  /// Task description text. Non-empty string up to 256 characters, validated
+  /// by application logic.
+  description String
+  
+  /// Task completion status, only 'pending' or 'done' values allowed.
+  status String
+  
+  /// Timestamp when the todo item was created.
+  created_at DateTime
+  
+  /// Timestamp when the todo item was last updated.
+  updated_at DateTime
+  
+  //----
+  // RELATIONS
+  //----
+  user todo_list_app_users @relation(fields: [todo_list_app_user_id], references: [id], onDelete: Cascade)
+  
+  @@index([todo_list_app_user_id, created_at])
+}

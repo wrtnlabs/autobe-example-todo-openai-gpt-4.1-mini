@@ -1,80 +1,95 @@
-# Functional Requirements Analysis for Todo List Application
+# Todo List Application - Functional Requirements Analysis
 
 ## 1. Introduction
-This document defines the complete functional business requirements for the Todo List application. It covers the lifecycle of todo items and the interactions users will have with the system. The scope is limited to minimum viable functionality enabling users to create, read, update, and delete todo items securely and efficiently while respecting defined business rules.
+This specification defines the complete set of functional requirements for the todoListApp backend. The system supports a single user role: "user," where each user can create, view, update, and delete their own todo items exclusively. The requirements employ the Easy Approach to Requirements Syntax (EARS) for clarity and testability, making all system behaviors explicit and verifiable.
 
-This document provides business requirements only. All technical implementation decisions such as architecture, APIs, and database designs are at the discretion of the development team. Developers have full autonomy over how they implement these requirements.
+The overall goal is to provide a minimal but fully functional todo list application backend that ensures secure and reliable management of personal task items.
 
-## 2. Creating Todos
-- WHEN an authenticated user submits a new todo item, THE system SHALL create a todo item associated with the user.
-- WHEN creating a todo item, THE system SHALL require a non-empty title as input.
-- WHERE a description is provided, THE system SHALL store the description alongside the todo item.
-- WHEN a todo item is created, THE system SHALL set its status as "pending" by default.
-- WHEN a todo item is created, THE system SHALL record its creation timestamp.
-- IF the title is empty or missing, THEN THE system SHALL reject the creation request with an appropriate error message.
+## 2. Todo Item Lifecycle
 
-## 3. Reading Todos
-- WHEN an authenticated user requests their todo list, THE system SHALL return all todo items owned by the user.
-- THE system SHALL order the todo items by creation timestamp, newest first.
-- WHERE filtering by status is requested, THE system SHALL return only todo items matching the specified status.
-- WHEN a guest or unauthenticated user attempts to view todos, THEN THE system SHALL deny access with an appropriate error message.
+### 2.1 Create Todo Item
+WHEN a user submits a request to create a new todo item with a description, THE system SHALL validate the description according to the validation rules in section 4 and create a todo item associated exclusively with that user. The created todo item SHALL have a unique identifier and its status SHALL be set to "pending" initially.
 
-## 4. Updating Todos
-- WHEN an authenticated user submits updates to a todo item they own, THE system SHALL apply changes.
-- THE system SHALL allow updating the title, description, and status of the todo item.
-- WHEN updating the status, THE system SHALL accept only predefined statuses: pending, in-progress, completed.
-- IF an invalid status value is submitted, THEN THE system SHALL reject the update with an appropriate error.
-- IF a user attempts to update a todo they do not own, THEN THE system SHALL deny the request with an authorization error.
+### 2.2 Retrieve Todo List
+WHEN a user requests to view their todo list, THE system SHALL return all todo items owned by that user ordered by their creation timestamp in ascending order.
 
-## 5. Deleting Todos
-- WHEN an authenticated user requests deletion of a todo item they own, THE system SHALL delete the todo item.
-- IF a user attempts to delete a todo they do not own, THEN THE system SHALL deny the request.
-- WHEN a todo item is deleted, THE system SHALL ensure it is no longer retrievable by the user or any other user.
+### 2.3 Update Todo Item
+WHEN a user requests to mark a todo item as done, THE system SHALL verify ownership of the item and update its status to "done".
 
-## 6. Business Rules and Validation
-- THE system SHALL enforce that todo titles are unique per user.
-- THE system SHALL limit todo title length to a maximum of 100 characters.
-- THE system SHALL limit the description length to 500 characters.
-- THE system SHALL prevent any todo operation from being performed by guests (unauthenticated users).
-- THE system SHALL maintain data integrity for all todo operations.
+WHEN a user requests to edit a todo item's description, THE system SHALL verify that the item is owned by the user and is currently in the "pending" status before updating the description.
 
-## 7. Error Handling
-- IF any required field is missing or invalid, THEN THE system SHALL return an HTTP 400 Bad Request with details.
-- IF authentication fails or user is unauthorized for the requested operation, THEN THE system SHALL return HTTP 401 Unauthorized or 403 Forbidden accordingly.
-- IF the requested todo item does not exist or is not accessible by the user, THEN THE system SHALL return HTTP 404 Not Found.
-- THE system SHALL return clear, user-readable error messages for all error responses.
+### 2.4 Delete Todo Item
+WHEN a user requests deletion of a todo item, THE system SHALL verify ownership and delete the item.
 
-## 8. Performance Expectations
-- WHEN a user creates, updates, deletes, or queries todo items, THE system SHALL process and respond within 2 seconds under normal load.
-- THE system SHALL support at least 1000 concurrent authenticated users performing CRUD operations without degradation.
+## 3. User Actions
 
-## Mermaid Diagram: Todo Item Lifecycle and User Interactions
+- Add a new todo item by providing a description.
+- Retrieve the full list of their todo items.
+- Mark a specific todo item as done.
+- Edit the description of a todo item currently in "pending" status.
+- Delete a todo item.
+
+## 4. Business Rules
+
+- Task descriptions SHALL be non-empty strings with a maximum length of 256 characters.
+- All todo items SHALL be associated with a single user who is the only one with access rights.
+- Status of todo items SHALL only be "pending" or "done".
+- Unique identifiers for todo items SHALL be unique per user and immutable.
+- Users SHALL NOT be able to view, modify, or delete todo items belonging to other users.
+
+## 5. Performance Expectations
+
+- THE system SHALL respond to todo item creation, retrieval, update, and deletion requests within 2 seconds under normal load conditions.
+- THE retrieval of up to 100 todo items SHALL complete within 1 second.
+
+## 6. Error Handling
+
+- IF a todo item creation or update request contains an invalid description (empty or exceeding 256 characters), THEN THE system SHALL reject the request and respond with a descriptive validation error message.
+- IF a user attempts to view or modify a todo item they do not own, THEN THE system SHALL reject the request with an authorization error.
+- IF a requested todo item does not exist (e.g., invalid ID), THEN THE system SHALL respond with a not-found error message.
+- IF an unexpected system error occurs, THEN THE system SHALL respond with a generic error message while logging the details internally.
+
+## 7. Diagrams
 
 ```mermaid
 graph LR
-  A["User Authenticates"] --> B{"Is User Authenticated?"}
-  B -->|"Yes"| C["Create Todo"]
-  B -->|"No"| D["Deny Access"]
-  C --> E["Validate Input"]
-  E --> F{"Is Input Valid?"}
-  F -->|"Yes"| G["Store Todo Item"]
-  F -->|"No"| H["Return Error"]
-  G --> I["Return Success"]
-  I --> J["User Views Todo List"]
-  J --> K["Filter / Sort Todos"]
-  K --> L["Return Todo List"]
-  L --> M["User Updates Todo"]
-  M --> N["Check Ownership"]
-  N -->|"Valid Owner"| O["Validate Update Input"]
-  O --> P{"Valid Update?"}
-  P -->|"Yes"| Q["Apply Update"]
-  P -->|"No"| R["Return Update Error"]
-  N -->|"Invalid Owner"| S["Return Authorization Error"]
-  Q --> T["User Deletes Todo"]
-  T --> U["Check Ownership"]
-  U -->|"Valid Owner"| V["Delete Todo"]
-  U -->|"Invalid Owner"| W["Return Authorization Error"]
-  V --> X["Confirm Deletion"]
+  A["Start"] --> B["User Requests Create Todo Item"]
+  B --> C["Validate Description"]
+  C --> D{"Description Valid?"}
+  D -->|"Yes"| E["Create Todo Item with Status 'pending'"]
+  D -->|"No"| F["Return Validation Error"]
+  E --> G["User Views Todo List"]
+  G --> H["Retrieve User's Todo Items"]
+  H --> I["Return Todo List"]
+
+  G --> J["User Requests Mark Item as Done"]
+  J --> K["Verify Ownership"]
+  K --> L{"Ownership Valid?"}
+  L -->|"Yes"| M["Update Status to 'done'"]
+  L -->|"No"| N["Return Authorization Error"]
+
+  G --> O["User Requests Edit Item Description"]
+  O --> P["Verify Ownership"]
+  P --> Q{"Ownership Valid?"}
+  Q -->|"Yes"| R["Check Item Status 'pending'? "]
+  Q -->|"No"| N
+  R -->|"Yes"| S["Update Description"]
+  R -->|"No"| N
+
+  G --> T["User Requests Delete Item"]
+  T --> U["Verify Ownership"]
+  U --> V{"Ownership Valid?"}
+  V -->|"Yes"| W["Delete Todo Item"]
+  V -->|"No"| N
+
+  M --> G
+  S --> G
+  W --> G
+  F --> B
+  N --> G
+  I --> "End"
 ```
 
-This completes the core functional requirements to enable backend developers to build the minimal Todo list application with clear, measurable, and actionable requirements.
+---
+
+The requirements are crafted exclusively as business rules using natural language and the EARS format, focusing on expected behaviors and constraints. The technical implementation details such as API protocols, database models, or internal system design are left to the development team to decide.

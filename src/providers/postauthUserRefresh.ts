@@ -1,86 +1,111 @@
-import jwt from "jsonwebtoken";
-import { MyGlobal } from "../MyGlobal";
-import typia, { tags } from "typia";
+import { HttpException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import jwt from "jsonwebtoken";
+import typia, { tags } from "typia";
 import { v4 } from "uuid";
-import { toISOStringSafe } from "../util/toISOStringSafe";
-import { ITodoListUser } from "@ORGANIZATION/PROJECT-api/lib/structures/ITodoListUser";
+import { MyGlobal } from "../MyGlobal";
+import { PasswordUtil } from "../utils/passwordUtil";
+import { toISOStringSafe } from "../utils/toISOStringSafe";
+
+import { ITodoListAppUser } from "@ORGANIZATION/PROJECT-api/lib/structures/ITodoListAppUser";
+import { IAuthorizationToken } from "@ORGANIZATION/PROJECT-api/lib/structures/IAuthorizationToken";
 import { UserPayload } from "../decorators/payload/UserPayload";
 
 /**
- * Refresh JWT token for user role 'user'.
+ * Refresh JWT token for todoListApp user using a valid refresh token.
  *
- * This function validates the provided refresh token, ensures the user is valid
- * and not soft deleted, and returns a new access and refresh token set. All
- * datetime values are ISO 8601 strings formatted with typia tags.
+ * Validates the provided refresh token, verifies user existence with confirmed
+ * email and no deletion, and issues new JWT access and refresh tokens.
  *
- * @param props - Object containing user payload and refresh token body
- * @param props.user - The authenticated user payload
- * @param props.body - The refresh token request body containing the
- *   refresh_token string
- * @returns Authorized user info including new JWT tokens
- * @throws {Error} Throws when token verification fails, token type mismatch, or
- *   user not found
+ * @param props - Object containing the authenticated user and the body with
+ *   refresh token.
+ * @param props.user - The authenticated user payload (not used for
+ *   authorization here).
+ * @param props.body - The request body containing the refresh token.
+ * @returns The authorized user information with new tokens.
+ * @throws HttpException(401) When the refresh token is invalid, expired, or
+ *   user not found.
  */
-export async function postauthUserRefresh(props: {
+export async function postAuthUserRefresh(props: {
   user: UserPayload;
-  body: ITodoListUser.IRefresh;
-}): Promise<ITodoListUser.IAuthorized> {
+  body: ITodoListAppUser.IRefresh;
+}): Promise<ITodoListAppUser.IAuthorized> {
   const { body } = props;
 
-  // Validate the refresh token with jwt.verify
-  const decoded = jwt.verify(body.refresh_token, MyGlobal.env.JWT_SECRET_KEY, {
-    issuer: "autobe",
-  }) as { id: string & tags.Format<"uuid">; type: "user"; exp: number };
-
-  if (decoded.type !== "user") {
-    throw new Error("Invalid token type");
+  let decoded: any;
+  try {
+    decoded = jwt.verify(body.refreshToken, MyGlobal.env.JWT_SECRET_KEY, {
+      issuer: "autobe",
+    });
+  } catch {
+    throw new HttpException(
+      "Unauthorized: Invalid or expired refresh token",
+      401,
+    );
   }
 
-  // Lookup the user in the database
-  const user = await MyGlobal.prisma.todo_list_user.findFirst({
-    where: { id: decoded.id, deleted_at: null },
+  if (
+    typeof decoded !== "object" ||
+    decoded === null ||
+    typeof decoded.id !== "string"
+  ) {
+    throw new HttpException("Unauthorized: Invalid token payload", 401);
+  }
+
+  const user = await MyGlobal.prisma.todo_list_app_users.findFirst({
+    where: {
+      id: decoded.id,
+      email_verified: true,
+      deleted_at: null,
+    },
   });
 
   if (!user) {
-    throw new Error("User not found or deleted");
+    throw new HttpException("Unauthorized: User not found or inactive", 401);
   }
 
-  // Prepare expiration ISO timestamps
-  const accessTokenExpiresAt = toISOStringSafe(
-    new Date(Date.now() + 3600 * 1000),
-  ); // 1 hour
-  const refreshTokenExpiresAt = toISOStringSafe(
-    new Date(Date.now() + 7 * 24 * 3600 * 1000),
-  ); // 7 days
+  // Define expiration times for tokens
+  const now = new Date();
+  const accessTokenExpiresIn = 60 * 60; // 1 hour in seconds
+  const refreshTokenExpiresIn = 7 * 24 * 60 * 60; // 7 days in seconds
 
-  // Generate new access token
+  const accessTokenExp = new Date(now.getTime() + accessTokenExpiresIn * 1000);
+  const refreshTokenExp = new Date(
+    now.getTime() + refreshTokenExpiresIn * 1000,
+  );
+
+  // Convert to ISO strings with tags, no Date usage in properties
+  const accessExpiredAt = accessTokenExp.toISOString() as string &
+    tags.Format<"date-time">;
+  const refreshExpiredAt = refreshTokenExp.toISOString() as string &
+    tags.Format<"date-time">;
+
+  // Create JWT tokens
   const accessToken = jwt.sign(
     { id: user.id, type: "user" },
     MyGlobal.env.JWT_SECRET_KEY,
-    { expiresIn: "1h", issuer: "autobe" },
+    {
+      expiresIn: accessTokenExpiresIn,
+      issuer: "autobe",
+    },
   );
 
-  // Generate new refresh token
   const refreshToken = jwt.sign(
-    { id: user.id, type: "user" },
+    { id: user.id, tokenType: "refresh" },
     MyGlobal.env.JWT_SECRET_KEY,
-    { expiresIn: "7d", issuer: "autobe" },
+    {
+      expiresIn: refreshTokenExpiresIn,
+      issuer: "autobe",
+    },
   );
 
-  // Return authorized response
   return {
     id: user.id,
-    email: user.email,
-    password_hash: user.password_hash,
-    created_at: toISOStringSafe(user.created_at),
-    updated_at: toISOStringSafe(user.updated_at),
-    deleted_at: user.deleted_at ? toISOStringSafe(user.deleted_at) : null,
     token: {
       access: accessToken,
       refresh: refreshToken,
-      expired_at: accessTokenExpiresAt,
-      refreshable_until: refreshTokenExpiresAt,
+      expired_at: accessExpiredAt,
+      refreshable_until: refreshExpiredAt,
     },
   };
 }

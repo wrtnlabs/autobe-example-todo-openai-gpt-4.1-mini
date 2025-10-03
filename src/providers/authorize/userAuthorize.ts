@@ -4,24 +4,18 @@ import { MyGlobal } from "../../MyGlobal";
 import { jwtAuthorize } from "./jwtAuthorize";
 import { UserPayload } from "../../decorators/payload/UserPayload";
 
-export async function userAuthorize(request: {
-  headers: {
-    authorization?: string;
-  };
-}): Promise<UserPayload> {
+export async function userAuthorize(request: { headers: { authorization?: string } }): Promise<UserPayload> {
   const payload: UserPayload = jwtAuthorize({ request }) as UserPayload;
 
   if (payload.type !== "user") {
     throw new ForbiddenException(`You're not ${payload.type}`);
   }
 
-  // payload.id contains top-level user table ID
-  // Query using primary key field since todo_list_user is top-level user
-  const user = await MyGlobal.prisma.todo_list_user.findFirst({
+  const user = await MyGlobal.prisma.todo_list_app_users.findFirst({
     where: {
       id: payload.id,
       deleted_at: null
-    },
+    }
   });
 
   if (user === null) {

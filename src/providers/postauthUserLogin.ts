@@ -1,73 +1,61 @@
-import jwt from "jsonwebtoken";
-import { MyGlobal } from "../MyGlobal";
-import typia, { tags } from "typia";
+import { HttpException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import jwt from "jsonwebtoken";
+import typia, { tags } from "typia";
 import { v4 } from "uuid";
-import { toISOStringSafe } from "../util/toISOStringSafe";
-import { ITodoListUser } from "@ORGANIZATION/PROJECT-api/lib/structures/ITodoListUser";
+import { MyGlobal } from "../MyGlobal";
+import { PasswordUtil } from "../utils/passwordUtil";
+import { toISOStringSafe } from "../utils/toISOStringSafe";
+
+import { ITodoListAppUser } from "@ORGANIZATION/PROJECT-api/lib/structures/ITodoListAppUser";
+import { IAuthorizationToken } from "@ORGANIZATION/PROJECT-api/lib/structures/IAuthorizationToken";
 import { UserPayload } from "../decorators/payload/UserPayload";
 
 /**
- * Login operation for todo_list_user role issuing access tokens after
- * successful authentication.
+ * User login for the todo_list_app_users table.
  *
- * Allows users to log in using email and password. Validates credentials
- * against todo_list_user table. Returns authorized tokens including access and
- * refresh JWT tokens.
+ * Authenticates a user by verifying email and password. Validates that the
+ * email is verified and user is not soft deleted. Returns JWT access and
+ * refresh tokens upon successful login.
  *
- * @param props - Object containing user payload (unused) and login body.
- * @param props.user - UserPayload, present by convention but unused in login.
- * @param props.body - ITodoListUser.ILogin containing login credentials.
- * @returns Promise resolving to ITodoListUser.IAuthorized with credentials and
- *   tokens.
- * @throws {Error} Throws "Invalid credentials" error when login validation
- *   fails.
+ * @param props - Object containing user login credentials.
+ * @param props.body - Login credentials including email and password.
+ * @param props.user - The authenticated user payload (not used for login).
+ * @returns Authorized user data with JWT tokens.
+ * @throws {HttpException} 401 if credentials are invalid or user not found.
  */
-export async function postauthUserLogin(props: {
+export async function postAuthUserLogin(props: {
   user: UserPayload;
-  body: ITodoListUser.ILogin;
-}): Promise<ITodoListUser.IAuthorized> {
+  body: ITodoListAppUser.ILogin;
+}): Promise<ITodoListAppUser.IAuthorized> {
   const { body } = props;
 
-  const user = await MyGlobal.prisma.todo_list_user.findFirst({
+  const user = await MyGlobal.prisma.todo_list_app_users.findFirst({
     where: {
       email: body.email,
+      email_verified: true,
       deleted_at: null,
     },
   });
 
   if (!user) {
-    throw new Error("Invalid credentials");
+    throw new HttpException("Invalid credentials", 401);
   }
 
-  const isPasswordValid = await MyGlobal.password.verify(
+  const passwordValid = await PasswordUtil.verify(
     body.password,
     user.password_hash,
   );
-
-  if (!isPasswordValid) {
-    throw new Error("Invalid credentials");
+  if (!passwordValid) {
+    throw new HttpException("Invalid credentials", 401);
   }
 
-  // Current timestamp
-  const now = new Date();
+  const now = toISOStringSafe(new Date());
 
-  // Calculate expiration dates as ISO strings
-  const accessTokenExpiresAt: string & tags.Format<"date-time"> =
-    toISOStringSafe(
-      new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-    );
-  const refreshTokenExpiresAt: string & tags.Format<"date-time"> =
-    toISOStringSafe(
-      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-    );
-
-  // Generate JWT access token
   const accessToken = jwt.sign(
     {
-      id: user.id,
+      userId: user.id,
       email: user.email,
-      type: "user",
     },
     MyGlobal.env.JWT_SECRET_KEY,
     {
@@ -76,10 +64,9 @@ export async function postauthUserLogin(props: {
     },
   );
 
-  // Generate JWT refresh token
   const refreshToken = jwt.sign(
     {
-      id: user.id,
+      userId: user.id,
       tokenType: "refresh",
     },
     MyGlobal.env.JWT_SECRET_KEY,
@@ -89,18 +76,18 @@ export async function postauthUserLogin(props: {
     },
   );
 
+  const expiredAt = toISOStringSafe(new Date(Date.now() + 3600 * 1000));
+  const refreshableUntil = toISOStringSafe(
+    new Date(Date.now() + 7 * 24 * 3600 * 1000),
+  );
+
   return {
     id: user.id,
-    email: user.email,
-    password_hash: user.password_hash,
-    created_at: toISOStringSafe(user.created_at),
-    updated_at: toISOStringSafe(user.updated_at),
-    deleted_at: user.deleted_at ? toISOStringSafe(user.deleted_at) : null,
     token: {
       access: accessToken,
       refresh: refreshToken,
-      expired_at: accessTokenExpiresAt,
-      refreshable_until: refreshTokenExpiresAt,
+      expired_at: expiredAt,
+      refreshable_until: refreshableUntil,
     },
   };
 }
