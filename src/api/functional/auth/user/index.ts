@@ -3,24 +3,38 @@ import { PlainFetcher } from "@nestia/fetcher/lib/PlainFetcher";
 import typia from "typia";
 import { NestiaSimulator } from "@nestia/fetcher/lib/NestiaSimulator";
 
-import { ITodoListAppUser } from "../../../structures/ITodoListAppUser";
+import { ITodoListUser } from "../../../structures/ITodoListUser";
 
 /**
- * Register new user for todo_list_app_users table.
+ * Register new user account in todo_list_users with secure password hashing and
+ * token issuance.
  *
- * Registers a new user account for the 'user' role in the todoListApp backend.
- * Validates email and password, stores user with hashed password and unverified
- * email status. On success, issues JWT access and refresh tokens. This
- * operation targets the todo_list_app_users table representing user accounts.
- * It manages creation timestamps and enforces email uniqueness. This endpoint
- * uses the 'join' authorization type indicating user registration. Validation
- * of email format and password policies are enforced at the application layer
- * before calling. Returns an authorized user response type
- * ITodoListAppUser.IAuthorized.
+ * This operation registers a new authenticated user by collecting a unique
+ * email and password. It securely stores the user's credentials in the
+ * todo_list_users table with the password saved as a hash in the password_hash
+ * column. The user's account lifecycle timestamps (created_at, updated_at) are
+ * managed accordingly. The email field must be unique, preventing duplicate
+ * registrations. Upon successful registration, the system issues JWT tokens for
+ * immediate use, encapsulated in the I{PascalPrefixName}{RoleName}.IAuthorized
+ * response format.
+ *
+ * The registration process ensures the user identity is unique via email and
+ * prepares the user for application login. No direct login is performed here;
+ * instead, tokens are issued after account creation.
+ *
+ * This operation is designed for authenticated member users with full access to
+ * personal todo task management.
+ *
+ * Security considerations include proper password hashing and secure token
+ * issuance. The API ensures soft deletion awareness by monitoring the
+ * deleted_at field.
+ *
+ * This operation complements the login and refresh token endpoints for a
+ * complete authentication flow for member users.
  *
  * @param props.connection
- * @param props.body User registration data including email and password,
- *   encapsulated in ITodoListAppUser.ICreate.
+ * @param props.body User registration data including unique email and plain
+ *   password to be hashed.
  * @setHeader token.access Authorization
  *
  * @path /auth/user/join
@@ -56,13 +70,13 @@ export async function join(
 export namespace join {
   export type Props = {
     /**
-     * User registration data including email and password, encapsulated in
-     * ITodoListAppUser.ICreate.
+     * User registration data including unique email and plain password to
+     * be hashed.
      */
-    body: ITodoListAppUser.ICreate;
+    body: ITodoListUser.ICreate;
   };
-  export type Body = ITodoListAppUser.ICreate;
-  export type Response = ITodoListAppUser.IAuthorized;
+  export type Body = ITodoListUser.ICreate;
+  export type Response = ITodoListUser.IAuthorized;
 
   export const METADATA = {
     method: "POST",
@@ -78,8 +92,8 @@ export namespace join {
   } as const;
 
   export const path = () => "/auth/user/join";
-  export const random = (): ITodoListAppUser.IAuthorized =>
-    typia.random<ITodoListAppUser.IAuthorized>();
+  export const random = (): ITodoListUser.IAuthorized =>
+    typia.random<ITodoListUser.IAuthorized>();
   export const simulate = (
     connection: IConnection,
     props: join.Props,
@@ -106,19 +120,33 @@ export namespace join {
 }
 
 /**
- * User login for todo_list_app_users table.
+ * Authenticate user via email and password from todo_list_users and issue JWT
+ * tokens.
  *
- * Authenticates an existing user by verifying email and password for the 'user'
- * role in todoListApp. Validates credentials against stored password hash and
- * email verification status. Issues JWT access and refresh tokens upon
- * successful login. Relies on todo_list_app_users table with unique email and
- * password_hash fields. Ensures user is not soft deleted and has verified
- * email. Uses 'login' authorization type as a secure authentication entry
- * point. Returns authorized user response ITodoListAppUser.IAuthorized.
+ * Log in an existing authenticated user by validating their email and password.
+ * The system verifies credentials against the todo_list_users table,
+ * specifically the password_hash field, and confirms the account is not soft
+ * deleted (deleted_at is null). Upon successful authentication, a JWT access
+ * token and refresh token are issued, returned in the
+ * I{PascalPrefixName}{RoleName}.IAuthorized response format.
+ *
+ * This endpoint is essential for member users to access their todo tasks and
+ * personal data. It ensures security by enforcing proper authentication checks,
+ * credential validation, and token issuance.
+ *
+ * The login operation depends on no other API endpoints but complements
+ * registration and token refresh endpoints to provide a full authentication
+ * lifecycle.
+ *
+ * Security mechanisms include password hashing verification, account state
+ * validation via deleted_at, and secure token generation.
+ *
+ * The operation path and method reflect standard RESTful practices for user
+ * authentication.
  *
  * @param props.connection
- * @param props.body Login credentials including email and password, defined in
- *   ITodoListAppUser.ILogin.
+ * @param props.body User login credentials containing email and plain password
+ *   for authentication.
  * @setHeader token.access Authorization
  *
  * @path /auth/user/login
@@ -154,13 +182,13 @@ export async function login(
 export namespace login {
   export type Props = {
     /**
-     * Login credentials including email and password, defined in
-     * ITodoListAppUser.ILogin.
+     * User login credentials containing email and plain password for
+     * authentication.
      */
-    body: ITodoListAppUser.ILogin;
+    body: ITodoListUser.ILogin;
   };
-  export type Body = ITodoListAppUser.ILogin;
-  export type Response = ITodoListAppUser.IAuthorized;
+  export type Body = ITodoListUser.ILogin;
+  export type Response = ITodoListUser.IAuthorized;
 
   export const METADATA = {
     method: "POST",
@@ -176,8 +204,8 @@ export namespace login {
   } as const;
 
   export const path = () => "/auth/user/login";
-  export const random = (): ITodoListAppUser.IAuthorized =>
-    typia.random<ITodoListAppUser.IAuthorized>();
+  export const random = (): ITodoListUser.IAuthorized =>
+    typia.random<ITodoListUser.IAuthorized>();
   export const simulate = (
     connection: IConnection,
     props: login.Props,
@@ -204,18 +232,33 @@ export namespace login {
 }
 
 /**
- * Refresh JWT token for todo_list_app_users table.
+ * Refresh access and refresh JWT tokens for authenticated user in
+ * todo_list_users.
  *
- * Refreshes JWT access token for the 'user' role using a valid refresh token.
- * Ensures continuous authenticated session without user re-login. Relies on the
- * todo_list_app_users table to validate user existence, email verification
- * status, and account state. Uses 'refresh' authorization type indicating token
- * renewal. Returns authorized user response ITodoListAppUser.IAuthorized with
- * new tokens.
+ * Refresh JWT tokens for an authenticated user by validating and rotating
+ * refresh token. The system selects the user from todo_list_users to confirm
+ * active status (deleted_at is null). Upon success, a new pair of access and
+ * refresh tokens is issued, returned in the
+ * I{PascalPrefixName}{RoleName}.IAuthorized response.
+ *
+ * This endpoint prolongs the session without requiring the user to login again.
+ * It completes the standard JWT token lifecycle for member users.
+ *
+ * Security protections include refresh token rotation to mitigate replay
+ * attacks and checks for account soft deletion.
+ *
+ * The operation is integral to secure session management in the Todo list
+ * application backend.
+ *
+ * It is distinct from join and login endpoints by focusing solely on existing
+ * valid session extension.
+ *
+ * The endpoint path and method follow best RESTful patterns for security token
+ * renewal processes.
  *
  * @param props.connection
- * @param props.body Refresh token request data containing the refresh token,
- *   defined in ITodoListAppUser.IRefresh.
+ * @param props.body Refresh token request containing valid refresh token for
+ *   session continuation.
  * @setHeader token.access Authorization
  *
  * @path /auth/user/refresh
@@ -251,13 +294,13 @@ export async function refresh(
 export namespace refresh {
   export type Props = {
     /**
-     * Refresh token request data containing the refresh token, defined in
-     * ITodoListAppUser.IRefresh.
+     * Refresh token request containing valid refresh token for session
+     * continuation.
      */
-    body: ITodoListAppUser.IRefresh;
+    body: ITodoListUser.IRefresh;
   };
-  export type Body = ITodoListAppUser.IRefresh;
-  export type Response = ITodoListAppUser.IAuthorized;
+  export type Body = ITodoListUser.IRefresh;
+  export type Response = ITodoListUser.IAuthorized;
 
   export const METADATA = {
     method: "POST",
@@ -273,8 +316,8 @@ export namespace refresh {
   } as const;
 
   export const path = () => "/auth/user/refresh";
-  export const random = (): ITodoListAppUser.IAuthorized =>
-    typia.random<ITodoListAppUser.IAuthorized>();
+  export const random = (): ITodoListUser.IAuthorized =>
+    typia.random<ITodoListUser.IAuthorized>();
   export const simulate = (
     connection: IConnection,
     props: refresh.Props,

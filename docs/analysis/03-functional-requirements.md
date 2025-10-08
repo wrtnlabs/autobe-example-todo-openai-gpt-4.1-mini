@@ -1,85 +1,103 @@
-# Todo List Application - Functional Requirements Analysis
+# Functional Requirements Analysis for Todo List Application
 
 ## 1. Introduction
-This document defines the business functional requirements for the todoListApp backend. The application supports a minimal todo list feature set allowing authenticated users to manage their own list of todo items through creation, retrieval, update, and deletion operations.
+This document specifies the business and functional requirements for a minimum viable Todo list application backend. The focus is on essential features allowing authenticated users to create, manage, complete, and delete personal tasks. The system does not support advanced features such as deadlines, reminders, or collaborative task management. It is intended for individual user use.
 
-The system supports a single user role: "user". Each user has exclusive access to their own todo items. This document uses the EARS format for clarity and testability.
+This document provides business requirements only. All technical implementation decisions (system architecture, API design, database schema, etc.) are the full responsibility of the development team.
 
-## 2. Todo Item Lifecycle
+## 2. Business Model
 
-### 2.1 Create Todo Item
-WHEN a user submits a request to create a new todo item with a description, THE system SHALL validate the description and create a todo item with a unique identifier and status "pending".
+### Why This Service Exists
+- The Todo list application addresses a universal need for simple, personal task management.
+- It fills the gap for users seeking a lightweight tool without complex features.
+- The market includes many competitors; this service differentiates by providing minimalism and ease of use.
 
-Business rules:
-- The description SHALL be a non-empty string with a maximum length of 256 characters.
-- The created todo item SHALL be associated exclusively with the creating user.
-- The todo item status SHALL initially be "pending".
+### Revenue Strategy
+- As a minimal application, initial revenue may not be the focus.
+- Potential future monetization may include ads, premium features, or integrations.
 
-### 2.2 Retrieve Todo List
-WHEN a user requests to view their todo list, THE system SHALL return all todo items owned by that user ordered by creation timestamp ascending.
+### Growth Plan
+- Growth driven by simplicity and ease of onboarding new users.
+- Focus on retaining users by ensuring reliability and performance.
 
-### 2.3 Update Todo Item
-WHEN a user requests to mark a todo item as done, THE system SHALL verify ownership and update its status to "done".
+### Success Metrics
+- Active user count (daily and monthly).
+- Task creation and completion rates.
+- User retention over time.
 
-WHEN a user requests to edit the description of a todo item, THE system SHALL verify that the item is in "pending" state and owned by the user, then update the description.
+## 3. User Roles and Permissions
 
-### 2.4 Delete Todo Item
-WHEN a user requests deletion of a todo item, THE system SHALL verify ownership and remove the todo item.
+| Role  | Description                                                                                                     | Permissions                                             |
+|-------|-----------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| Guest | Unauthenticated users with read-only access (viewing public information only).                                  | Cannot create, update, or delete tasks.                  |
+| User  | Authenticated users who can create, update, complete, and delete their own tasks.                               | Full CRUD on their own tasks.                            |
+| Admin | System administrators with permissions to manage all users and system-wide settings.                           | Manage all user accounts and oversee system operations. |
 
-## 3. User Actions
-- Add a new todo item with a description.
-- Retrieve the user's complete todo list.
-- Mark a todo item as done.
-- Edit a pending todo item's description.
-- Delete a todo item.
+## 4. Task Management
 
-## 4. Business Rules
-- Users SHALL only access and modify their own todo items.
-- Todo item descriptions SHALL be validated for length and non-empty status.
-- Todo item status field SHALL only have values "pending" or "done".
-- IDs of todo items SHALL be unique per user.
+### 4.1 Task Creation
+- WHEN a user submits a new task description, THE system SHALL create a new todo task associated with that user.
+- WHEN a task is created, THE system SHALL assign it a unique identifier.
+- THE task SHALL have a description text and a completion status set to "pending" by default.
 
-## 5. Performance Expectations
-- THE system SHALL respond to create, update, delete, and retrieval requests within 2 seconds (under typical load).
-- Retrieval of up to 100 todo items SHALL complete within 1 second.
+### 4.2 Task Update
+- WHEN a user updates the description of an existing task, THE system SHALL save the new description.
+- THE system SHALL NOT allow users to update tasks that do not belong to them.
 
-## 6. Error Handling
-- IF a todo item creation request includes an invalid (empty or overly long) description, THEN THE system SHALL respond with an error indicating invalid input.
-- IF a user attempts operations on todo items they do not own or that do not exist, THEN THE system SHALL respond with proper authorization error.
-- IF unexpected system errors occur, THEN THE system SHALL return a generic failure message.
+### 4.3 Task Completion
+- WHEN a user marks a task as completed, THE system SHALL update the task's status to "completed".
+- WHEN a user marks a task as pending again, THE system SHALL update the status to "pending".
 
-## 7. Diagrams
+### 4.4 Task Deletion
+- WHEN a user requests deletion of a task, THE system SHALL delete that task.
+- THE system SHALL NOT allow users to delete tasks that do not belong to them.
+
+### 4.5 Task Listing
+- WHEN a user requests their task list, THE system SHALL return all tasks associated with that user.
+- THE system SHALL include task descriptions and completion statuses in the listing.
+
+## 5. Task Life Cycle
+
+The task life cycle includes the following states and transitions:
+- Created (pending status)
+- Updated (description or status change)
+- Completed
+- Deleted
 
 ```mermaid
 graph LR
-  A["Start"] --> B["User Requests Create Todo Item"]
-  B --> C["Validate Description"]
-  C --> D{"Is Description Valid?"}
-  D -->|"Yes"| E["Create Todo Item with Status Pending"]
-  D -->|"No"| F["Return Invalid Description Error"]
-  E --> G["User Views Todo List"]
-  G --> H["Retrieve User's Todo Items"]
-  H --> I["Return Todo List"]
-
-  G --> J["User Requests Mark Item Done"]
-  J --> K["Verify Ownership"]
-  K --> L{"Ownership Valid?"}
-  L -->|"Yes"| M["Update Status to Done"]
-  L -->|"No"| N["Return Authorization Error"]
-
-  G --> O["User Requests Delete Item"]
-  O --> P["Verify Ownership"]
-  P --> Q{"Ownership Valid?"}
-  Q -->|"Yes"| R["Delete Todo Item"]
-  Q -->|"No"| N
-
-  M --> G
-  R --> G
-  F --> B
-  N --> G
-  I --> "End"
+  A["Task Created (Pending)"] --> B{"User Updates Task?"}
+  B -->|"Yes"| C["Update Task"]
+  B -->|"No"| D["No Change"]
+  C --> E{"User Marks Completed?"}
+  E -->|"Yes"| F["Status: Completed"]
+  E -->|"No"| G["Status: Pending"]
+  F --> H{"User Deletes Task?"}
+  G --> H
+  H -->|"Yes"| I["Task Deleted"]
+  H -->|"No"| D
 ```
+
+## 6. Validation Rules
+
+- WHEN a user submits a new task description, THEN THE system SHALL validate that the description is a non-empty string.
+- IF the description is empty or only whitespace, THEN THE system SHALL reject the creation request with an error.
+- WHEN a user updates a task description, THEN THE system SHALL apply the same validation.
+- THE system SHALL enforce that only authenticated users can create, update, complete, or delete tasks.
+
+## 7. Error Handling
+
+- IF a user attempts to modify or delete a task that does not belong to them, THEN THE system SHALL respond with an authorization error.
+- IF a user submits invalid task data (e.g., empty description), THEN THE system SHALL provide a validation error with a descriptive message.
+- IF an unauthenticated user attempts to perform restricted actions, THEN THE system SHALL deny access and return an authentication error.
+
+## 8. Performance Requirements
+
+- WHEN a user requests their list of tasks, THEN THE system SHALL respond within 2 seconds under normal operating conditions.
+- WHEN a user creates, updates, completes, or deletes a task, THEN THE system SHALL reflect changes in the backend within 2 seconds.
+- THE system SHALL handle concurrent requests from multiple users without data loss or corruption.
 
 ---
 
-This document provides business requirements only. All technical implementation decisions, including architecture, APIs, database design, and other technical details, are at the discretion of the development team. The document describes what the system must do, not how it should be implemented.
+This document contains business requirements only. All technical implementation decisions about how to build the system, including APIs, database schema, and architecture, are fully delegated to the development team.
+The document specifies WHAT the system must do, not HOW to implement it.

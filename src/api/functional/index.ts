@@ -1,2 +1,2 @@
 export * as auth from "./auth/index";
-export * as todoListApp from "./todoListApp/index";
+export * as todoList from "./todoList/index";

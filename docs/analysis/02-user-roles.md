@@ -1,99 +1,93 @@
-# User Roles and Authentication for Todo list application
+# Functional Requirements Analysis for Todo List Application
 
 ## 1. Introduction
-This document provides the complete business requirements for user roles, authentication flows, and permissions for the Todo list application backend. It focuses on minimal functional scope for a simple Todo list app where a single type of authenticated user can manage their own tasks.
+This document specifies the business and functional requirements for a minimum viable Todo list application backend. The primary audience is backend developers who will implement the system. The scope includes essential features that allow authenticated users to create, view, update, complete, and delete their tasks. It excludes complex features like collaboration, reminders, or deadlines.
 
-This document provides business requirements only. All technical implementation decisions including architecture, APIs, and database design are at the discretion of the development team. The document prescribes WHAT the system must do, not HOW it shall be built.
+## 2. Business Model
+The Todo list application meets a market need for simple, personal task management without complexity. It fills the gap for users needing lightweight solutions. Initial revenue focus is on user acquisition with potential future premium features.
 
-## 2. User Role Definitions
+## 3. User Roles and Permissions
+The system defines three user roles each with specific permissions:
 
-### 2.1 User Roles Overview
-There is only one user role in this system:
+- **Guest**: Unauthenticated users with read-only access to public information. They cannot create or modify tasks.
+- **User**: Authenticated users who manage personal todo tasks fully.
+- **Admin**: System administrators with permissions to manage all users and system settings.
 
-| Role Name | Description |
-|-----------|-------------|
-| user      | Authenticated users who can create, read, update, and delete their own todo items. They have personal access and full management rights over their tasks. |
+### 3.1 Authentication Workflows
+- WHEN a user registers with valid email and password, THEN the system SHALL create an account and send a verification email within 1 minute.
+- WHEN a user attempts login with credentials, THEN the system SHALL validate and grant access within 2 seconds or return error on failure.
+- WHEN a user logs out, THEN the system SHALL invalidate the current session token immediately.
+- Session tokens SHALL expire after 30 minutes of inactivity.
+- Refresh tokens SHALL allow session renewal for up to 14 days.
+- Users SHALL be able to request password reset emails which expire after 1 hour.
+- Users SHALL be able to change passwords after authentication.
+- Users SHALL have the ability to revoke all active sessions.
 
-### 2.2 Role Characteristics
-- Users are individuals who register and authenticate with the system.
-- Each user can only access and manage their own todo items.
-- There are no administrative or multi-user roles currently.
+### 3.2 Permission Matrix
+| Action                               | Guest | User | Admin |
+|------------------------------------|-------|------|-------|
+| View public information             | ✅    | ✅   | ✅    |
+| Register an account                 | ❌    | N/A  | ❌    |
+| Create todo task                   | ❌    | ✅   | ✅    |
+| Update own todo task               | ❌    | ✅   | ✅    |
+| Mark own task as completed/pending| ❌    | ✅   | ✅    |
+| Delete own todo task               | ❌    | ✅   | ✅    |
+| Manage all users                   | ❌    | ❌   | ✅    |
+| Manage system settings            | ❌    | ❌   | ✅    |
 
-## 3. Authentication Flow Requirements
+## 4. Task Management
+### 4.1 Task Creation
+- WHEN a user submits a new task description that is non-empty, THEN the system SHALL create the task with a unique ID and pending status.
+- IF the description is empty or whitespace only, THEN the system SHALL reject the creation with a validation error.
 
-### 3.1 Core Authentication Functions
-- THE todoListApp SHALL allow users to register an account with an email address and password.
-- WHEN a user submits registration data, THE todoListApp SHALL validate the email format and password strength.
-- THE todoListApp SHALL allow users to log in using email and password credentials.
-- WHEN a user submits login credentials, THE todoListApp SHALL verify them and establish a secure user session.
-- THE todoListApp SHALL provide a logout function that invalidates the user session.
-- WHEN a user requests password reset, THE todoListApp SHALL provide a mechanism to securely reset the password via email.
-- THE todoListApp SHALL maintain authenticated user sessions securely until logout or session expiration.
-- THE todoListApp SHALL enforce a session expiration time of 30 minutes of inactivity.
-- THE todoListApp SHALL require users to verify their email addresses before gaining full access.
-- WHEN a user attempts to access any Todo item data, THE todoListApp SHALL verify the user is authenticated.
+### 4.2 Task Update
+- WHEN a user updates a task description or status, THEN the system SHALL validate ownership and apply changes.
+- THE task status SHALL be either "pending" or "completed".
 
-### 3.2 Registration
-- WHEN a new user registers, THE todoListApp SHALL ensure the email is unique in the system.
-- IF the email is already registered, THEN THE todoListApp SHALL reject registration with an appropriate error message.
+### 4.3 Task Deletion
+- WHEN a user requests task deletion, THEN the system SHALL verify ownership and delete the task.
 
-### 3.3 Password Rules
-- THE todoListApp SHALL require passwords to be at least 8 characters long.
-- THE todoListApp SHALL enforce password complexity rules (at least one uppercase letter, one number, and one special character).
+### 4.4 Task Listing
+- WHEN a user requests their task list, THEN the system SHALL return all tasks with descriptions and statuses.
 
-### 3.4 Email Verification
-- THE todoListApp SHALL send a verification email upon registration.
-- WHEN the user clicks the verification link, THE todoListApp SHALL mark the email as verified.
-- IF the user has not verified their email within 24 hours, THEN THE todoListApp SHALL restrict access to todo item management features.
-
-### 3.5 Error Handling
-- IF login credentials are invalid, THEN THE todoListApp SHALL return an authentication failure error.
-- IF the user attempts actions without authentication, THEN THE todoListApp SHALL reject with appropriate authorization error.
-
-## 4. Permission Matrix
-
-| Action               | user (Authenticated) |
-|----------------------|---------------------|
-| Register             | ✅                  |
-| Login                | ✅                  |
-| Logout               | ✅                  |
-| Create Todo Item     | ✅                  |
-| Read Own Todo Items  | ✅                  |
-| Update Own Todo Item | ✅                  |
-| Delete Own Todo Item | ✅                  |
-| Access Others' Items | ❌                  |
-| Manage Other Users   | ❌                  |
-
-### 4.1 Access Control Rules
-- Users SHALL only be able to access todo items they own.
-- Any attempt to access or modify todo items belonging to another user SHALL be rejected.
-
-## 5. Summary
-This document specifies a single user role "user" who can fully manage their own todo items. It details all authentication flows including registration, login, logout, email verification, and session management with explicit rules on password complexity and error handling.
-The permission matrix clearly defines capabilities limited to the user's own data.
-
-Mermaid Diagram illustrating Authentication Flow:
+## 5. Task Life Cycle
 
 ```mermaid
 graph LR
-  A["User Registration"] --> B["Validate Email and Password"]
-  B --> C{"Email Unique?"}
-  C -->|"Yes"| D["Create User Account"]
-  C -->|"No"| E["Reject Registration"]
-  D --> F["Send Verification Email"]
-  F --> G["User Verifies Email"]
-  G --> H["Activate User Account"]
-  
-  subgraph "Login Process"
-    I["User Login"] --> J["Validate Credentials"]
-    J --> K{"Credentials Valid?"}
-    K -->|"Yes"| L["Create Session"]
-    K -->|"No"| M["Return Error"]
-  end
-
-  L --> N["Access Todo Items"]
-  M --> I
-  E --> A
+  A["Task Created (Pending)"] --> B{"Request to Update Task?"}
+  B -->|"Yes"| C["Validate Ownership and Update"]
+  B -->|"No"| D["No Change"]
+  C --> E{"Task Status Changed?"}
+  E -->|"Yes"| F["Set Status Completed or Pending"]
+  E -->|"No"| D
+  F --> G{"Request to Delete?"}
+  D --> G
+  G -->|"Yes"| H["Delete Task"]
+  G -->|"No"| D
 ```
 
-This document covers only business requirements for user roles and authentication in natural language and EARS format. All technical realizations including API design, database schemas, and security implementations are left to developers' discretion.
+## 6. Validation Rules
+- Task descriptions SHALL be non-empty strings trimmed of whitespace.
+- Task status SHALL be one of the enum values: "pending", "completed".
+- Only authenticated users SHALL be able to create, update, complete, or delete tasks.
+
+## 7. Error Handling
+- WHEN a user attempts to modify a task they do not own, THEN the system SHALL respond with a 403 authorization error.
+- WHEN validation fails (e.g., empty description), THEN the system SHALL respond with a 400 validation error.
+- WHEN unauthenticated users attempt restricted actions, THEN the system SHALL respond with a 401 authentication error.
+
+## 8. Performance Requirements
+- Task operations (create, update, delete) SHALL complete within 2 seconds under nominal load.
+- Task listing SHALL respond within 2 seconds.
+- The system SHALL maintain data consistency under concurrent access.
+
+## 9. Security and Authentication
+- Session tokens SHALL be stored securely using httpOnly cookies.
+- Refresh tokens SHALL be rotated on use to prevent replay attacks.
+- All endpoints requiring authentication SHALL verify the session token.
+- Users SHALL receive clear error messages on authentication failures.
+
+## 10. Summary
+The Todo list backend SHALL provide minimal but complete functionality for personal task management with strong authentication, proper authorization, and responsive performance. The system SHALL reject invalid data and deny unauthorized access with clear error reporting.
+
+This document defines fully specified business requirements with precise behaviors to enable backend developers to implement the system as intended.
